@@ -3,6 +3,8 @@ dynfont.__index = dynfont
 
 dynfont.cache = {}
 
+dynfont.scale = 1
+
 function dynfont.resize()
     dynfont.cache = {}
 end
@@ -31,7 +33,11 @@ function dynfont:__call(size, hinting, dpiscale)
         dynfont.cache[id] =
             love.graphics.newFont(self.file, size, hinting, dpiscale)
     else
-        dynfont.cache[id] = love.graphics.newFont(size or 12, hinting, dpiscale)
+        dynfont.cache[id] = love.graphics.newFont(
+            (size or 12) * dynfont.scale,
+            hinting,
+            dpiscale
+        )
     end
     return dynfont.cache[id]
 end

@@ -9,6 +9,7 @@ end
 local bitser = require("bitser")
 
 shared.port = 15668
+shared.block_cooldown = 0.5
 
 ---@enum shared.type
 shared.type = {
@@ -18,14 +19,16 @@ shared.type = {
     client_register_player = 2,
     -- BOHT [msg: string]
     message = 3,
+    -- SERVER []
+    game_start = 4,
     -- CLIENT []
-    block_up = 4,
-    block_down = 5,
-    attack = 6,
+    block_up = 5,
+    block_down = 6,
+    attack = 7,
     -- SERVER [this_player: bool]
-    display_block_up = 7,
-    display_block_down = 8,
-    display_attack = 9,
+    display_block_up = 8,
+    display_block_down = 9,
+    display_attack = 10,
 }
 
 ---@enum shared.format
@@ -39,6 +42,16 @@ function shared.format_time(time)
     return os.date("%H:%M:%S", math.floor(time))
         .. "."
         .. math.floor((time % 1) * 1000)
+end
+
+shared.players = {}
+
+function shared.other_player(player)
+    for _, v in pairs(shared.players) do
+        if v ~= player then
+            return v
+        end
+    end
 end
 
 function shared.new_register_player(t)
@@ -61,6 +74,10 @@ function shared.new_message(...)
         shared.type.message,
         table.concat({ ... }, " "),
     })
+end
+
+function shared.new_game_start()
+    return bitser.dumps({ shared.type.game_start })
 end
 
 function shared.new_block_up()

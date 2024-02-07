@@ -2,6 +2,8 @@ local enet = require("enet")
 local shared = require("shared")
 local bitser = require("bitser")
 
+local Signal = require("hump.signal")
+
 local bind_address = "localhost:" .. shared.port
 local peer_count = 1
 
@@ -9,7 +11,8 @@ local host = nil
 local server = nil
 
 local client = {}
-client.players = {}
+client.messages = {}
+client.players = shared.players
 local player_map = { [true] = 1, [false] = 2 }
 
 local function on_connect(peer)
@@ -29,17 +32,33 @@ end
 local function on_receive(data)
     assert(server)
     if shared.is_message(data) then
-        print(data[shared.format[1]])
+        table.insert(client.messages, data[shared.format[1]])
     end
     if shared.is_client_register_player(data) then
-        local meta = data[shared.format[1]]
-        local other_player = data[shared.format[2]]
+        local player_data = data[shared.format[1]]
+        local this_player = data[shared.format[2]]
 
-        client.players[player_map[other_player]] = meta
+        client.players[player_map[this_player]] =
+            require("player").new(player_data)
 
-        if other_player == true then
+        if this_player == true then
             server:send(shared.new_message("Hi"))
         end
+    end
+    if shared.is_game_start(data) then
+        require("queue").start_game()
+    end
+    if shared.is_display_block_down(data) then
+        local this_player = data[shared.format[1]]
+        client.players[player_map[this_player]].blocking = true
+    end
+    if shared.is_display_block_up(data) then
+        local this_player = data[shared.format[1]]
+        client.players[player_map[this_player]].blocking = false
+    end
+    if shared.is_display_attack(data) then
+        local this_player = data[shared.format[1]]
+        client.players[player_map[this_player]]:attack()
     end
 end
 
@@ -60,6 +79,7 @@ local function connecting_routine()
     if connecting_tries >= connecting_max_tries then
         connecting = false
         host = nil
+        server = nil
         print("unable to connect to server at " .. bind_address)
     end
 end
@@ -97,6 +117,21 @@ function client.update(dt)
         event = host:check_events()
         count = count + 1
     end
+end
+
+function client:block_up()
+    assert(server)
+    server:send(shared.new_block_up())
+end
+
+function client:block_down()
+    assert(server)
+    server:send(shared.new_block_down())
+end
+
+function client:attack()
+    assert(server)
+    server:send(shared.new_attack())
 end
 
 return client

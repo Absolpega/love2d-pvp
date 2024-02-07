@@ -13,10 +13,18 @@ local host = nil
 
 local players = {}
 
-local function other_peer(current_peer)
-    for peer, _ in pairs(players) do
-        if peer ~= current_peer then
-            return peer
+local function peer_name(peer)
+    return players[peer] and players[peer].name or tostring(peer)
+end
+
+local function ftime()
+    return "[" .. shared.format_time(socket.gettime()) .. "]"
+end
+
+local function other_peer(peer)
+    for k, _ in pairs(players) do
+        if k ~= peer then
+            return k
         end
     end
     return nil
@@ -26,19 +34,14 @@ local function other_player(peer)
     return players[other_peer(peer)]
 end
 
-local function peer_name(peer)
-    return players[peer] and players[peer].name or tostring(peer)
-end
-
-local function ftime()
-    return "[" .. shared.format_time(socket.gettime()) .. "]"
+local function player_new(t)
+    t.blocking = t.blocking or false
+    t.last_block = t.last_block or 0
+    return t
 end
 
 local function on_connect(peer)
     assert(host)
-    -- host:broadcast(
-    --     shared.new_message(ftime(), peer_name(peer), "connected")
-    -- )
 end
 
 local function on_disconnect(peer)
@@ -61,7 +64,7 @@ local function on_receive(peer, data)
         )
     end
     if shared.is_register_player(data) then
-        players[peer] = data[shared.format[1]]
+        players[peer] = player_new(data[shared.format[1]])
         if other_player(peer) then
             if players[peer].name == other_player(peer).name then
                 players[peer].name = players[peer].name .. "(2)"
@@ -78,7 +81,39 @@ local function on_receive(peer, data)
             other_peer(peer):send(
                 shared.new_client_register_player(players[peer], false)
             )
+            host:broadcast(shared.new_game_start())
         end
+    end
+    if shared.is_block_down(data) then
+        if
+            not players[peer].block_down
+            and socket.gettime() - players[peer].last_block
+                > shared.block_cooldown
+        then
+            players[peer].blocking = true
+
+            peer:send(shared.new_display_block_down(true))
+            other_peer(peer):send(shared.new_display_block_down(false))
+        end
+        players[peer].block_down = true
+    end
+    if shared.is_block_up(data) then
+        if
+            players[peer].block_down
+            and socket.gettime() - players[peer].last_block
+                > shared.block_cooldown
+        then
+            players[peer].blocking = false
+            players[peer].last_block = socket.gettime()
+
+            peer:send(shared.new_display_block_up(true))
+            other_peer(peer):send(shared.new_display_block_up(false))
+        end
+        players[peer].block_down = false
+    end
+    if shared.is_attack(data) then
+        peer:send(shared.new_display_attack(true))
+        other_peer(peer):send(shared.new_display_attack(false))
     end
 end
 
